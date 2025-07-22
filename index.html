@@ -28,53 +28,49 @@
     <h1 style="color:var(--blue)">Local Territory Lookup</h1>
     <p>
       Upload a CSV or paste TSV (from Excel) that contains <strong>latitude</strong> and <strong>longitude</strong> columns.
-      We’ll add a “Local” column with the territory name.
+      We’ll add a “Local” column and return CSV ready for Excel.
     </p>
 
     <input id="csvFile" type="file" accept=".csv,.txt"/>
     <br><br>
     <textarea id="tsvPaste" placeholder="ID,Lat,Lng&#10;1,41.8888,-87.6523"></textarea>
     <br>
-    <button id="goBtn" onclick="run()">Process</button>
+    <button onclick="run()">Process</button>
 
     <div id="output"></div>
   </div>
 
-  <footer>Powered by <span style="color:var(--orange)">GeoJSON & Love</span></footer>
+  <footer>Powered by <span style="color:var(--orange)">GeoJSON & Solidarity</span></footer>
 
   <!-- libs -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
 
+  <!-- geojson -->
   <script>
-    let locals;   // GeoJSON FeatureCollection
+    let locals;   // FeatureCollection
 
-    // fetch the GeoJSON once
     fetch('localsmap.txt')
       .then(r => r.json())
       .then(data => { locals = data; console.log('GeoJSON loaded ✔'); })
       .catch(err => alert('Could not load localsmap.txt\n' + err));
 
     function run() {
-      console.clear();
       const fileInput = document.getElementById('csvFile').files[0];
       const textInput = document.getElementById('tsvPaste').value.trim();
 
       if (!locals) { alert('GeoJSON not loaded yet (see console).'); return; }
 
       if (fileInput) {
-        console.log('Parsing file…');
         Papa.parse(fileInput, { header: true, skipEmptyLines: true, complete: process });
       } else if (textInput) {
-        console.log('Parsing pasted text…');
         Papa.parse(textInput, { header: true, skipEmptyLines: true, delimiter: '\t', complete: process });
       } else {
         alert('Please upload a file or paste data.');
       }
 
-      function process(res) {
-        const rows = res.data;
-        console.log('Rows received:', rows.length);
+      function process(results) {
+        const rows = results.data;
         if (!rows.length) { alert('No rows'); return; }
 
         const latCol = Object.keys(rows[0]).find(k => k.toLowerCase().includes('lat'));
@@ -97,10 +93,10 @@
           return { ...r, Local: territory };
         });
 
-        const header = Object.keys(newRows[0]);
-        const tsv = [header.join('\t'), ...newRows.map(r => header.map(h => r[h] ?? '').join('\t'))].join('\n');
+        // CSV ready for Excel
+        const csv = Papa.unparse(newRows);
         const out = document.getElementById('output');
-        out.textContent = tsv;
+        out.textContent = csv;
         out.style.display = 'block';
         out.classList.add('fade');
       }
