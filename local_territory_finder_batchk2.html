@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Local Territory Lookup</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --blue: #0288d1;
+      --orange: #ff9800;
+      --bg: #f7f9fc;
+      --text: #1f2937;
+      --border: #e5e7eb;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 2rem;
+      line-height: 1.5;
+    }
+    h1 { font-weight: 600; margin-bottom: .5rem; }
+    p { margin-bottom: 1.5rem; color: #6b7280; }
+    .card {
+      max-width: 700px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 8px;
+      padding: 2rem;
+      box-shadow: 0 4px 12px rgba(0,0,0,.05);
+    }
+    label {
+      font-weight: 600;
+      display: block;
+      margin-bottom: .5rem;
+    }
+    input[type=file] {
+      width: 100%;
+      margin-bottom: 1rem;
+    }
+    textarea {
+      width: 100%;
+      min-height: 150px;
+      padding: .75rem;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-family: inherit;
+      resize: vertical;
+    }
+    button {
+      margin-top: 1rem;
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      padding: .75rem 1.25rem;
+      border-radius: 4px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    button:hover { background: #0277bd; }
+    #output {
+      margin-top: 2rem;
+      white-space: pre-wrap;
+      font-family: 'Courier New', monospace;
+      background: #f3f4f6;
+      padding: 1rem;
+      border-radius: 4px;
+      overflow-x: auto;
+      display: none;
+    }
+    .fade { animation: fade .4s ease-in; }
+    @keyframes fade { from {opacity:0} to {opacity:1} }
+    footer {
+      text-align: center;
+      margin-top: 2rem;
+      font-size: .875rem;
+      color: #9ca3af;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1 style="color: var(--blue);">Local Territory Lookup</h1>
+    <p>Paste TSV (from Excel) or upload a CSV file that contains <strong>latitude</strong> and <strong>longitude</strong> columns.<br/>We’ll append a “Local” column with the territory name.</p>
+
+    <label for="csvFile">Upload CSV</label>
+    <input id="csvFile" type="file" accept=".csv,.txt"/>
+
+    <label for="tsvPaste">…or paste TSV / CSV here</label>
+    <textarea id="tsvPaste" placeholder="ID	Lat	Lng&#10;1	41.8888	-87.6523&#10;..."></textarea>
+
+    <button onclick="run()">Process</button>
+
+    <div id="output"></div>
+  </div>
+
+  <footer>Powered by <span style="color: var(--orange);">GeoJSON & Love</span></footer>
+
+  <!-- Libraries -->
+  <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://unpkg.com/turf@6/turf.min.js"></script>
+
+  <script>
+    let locals; // GeoJSON FeatureCollection
+
+    // Fetch the GeoJSON once
+    fetch('localsmap.txt')
+      .then(r => r.json())
+      .then(data => { locals = data; })
+      .catch(err => alert('Could not load localsmap.txt\n' + err));
+
+    function run() {
+      const fileInput = document.getElementById('csvFile').files[0];
+      const textInput = document.getElementById('tsvPaste').value.trim();
+
+      if (!locals) { alert('GeoJSON not loaded yet. Refresh?'); return; }
+
+      if (fileInput) {
+        Papa.parse(fileInput, { header: true, skipEmptyLines: true, complete: process });
+      } else if (textInput) {
+        Papa.parse(textInput, { header: true, skipEmptyLines: true, delimiter: '\t', complete: process });
+      } else {
+        alert('Please upload a file or paste data.');
+      }
+
+      function process(results) {
+        const rows = results.data;
+        if (!rows.length) return alert('No data found.');
+
+        // Detect lat/lng columns (case-insensitive)
+        const latCol = Object.keys(rows[0]).find(k => k.toLowerCase().includes('lat'));
+        const lngCol = Object.keys(rows[0]).find(k => k.toLowerCase().includes('lon'));
+        if (!latCol || !lngCol) return alert('Could not find Lat / Lng columns.');
+
+        // Add new column
+        const newRows = rows.map(r => {
+          const lat = parseFloat(r[latCol]);
+          const lng = parseFloat(r[lngCol]);
+          let territory = '';
+          if (!isNaN(lat) && !isNaN(lng)) {
+            const pt = turf.point([lng, lat]);
+            for (const feat of locals.features) {
+              if (turf.booleanPointInPolygon(pt, feat)) {
+                territory = feat.properties.name || '';
+                break;
+              }
+            }
+          }
+          return { ...r, Local: territory };
+        });
+
+        // Export as TSV
+        const header = Object.keys(newRows[0]);
+        const tsv = [header.join('\t'), ...newRows.map(r => header.map(h => r[h] ?? '').join('\t'))].join('\n');
+        document.getElementById('output').textContent = tsv;
+        document.getElementById('output').style.display = 'block';
+        document.getElementById('output').classList.add('fade');
+      }
+    }
+  </script>
+</body>
+</html>
