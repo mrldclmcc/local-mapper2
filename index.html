@@ -17,9 +17,6 @@
     textarea{width:100%;min-height:150px;padding:.75rem;border:1px solid var(--border);border-radius:4px;font-family:inherit;resize:vertical}
     button{margin-top:1rem;background:var(--blue);color:#fff;border:none;padding:.75rem 1.25rem;border-radius:4px;font-size:1rem;cursor:pointer;transition:background .2s}
     button:hover{background:#0277bd}
-    #output{margin-top:2rem;white-space:pre-wrap;font-family:'Courier New',monospace;background:#f3f4f6;padding:1rem;border-radius:4px;overflow-x:auto;display:none}
-    .fade{animation:fade .4s ease-in}
-    @keyframes fade{from{opacity:0}to{opacity:1}}
     footer{text-align:center;margin-top:2rem;font-size:.875rem;color:#9ca3af}
   </style>
 </head>
@@ -28,19 +25,17 @@
     <h1 style="color:var(--blue)">Local Territory Lookup</h1>
     <p>
       Upload a CSV or paste TSV (from Excel) that contains <strong>latitude</strong> and <strong>longitude</strong> columns.
-      We’ll add a “Local” column and return CSV ready for Excel.
+      You’ll get a downloadable CSV ready for Excel.
     </p>
 
     <input id="csvFile" type="file" accept=".csv,.txt"/>
     <br><br>
     <textarea id="tsvPaste" placeholder="ID,Lat,Lng&#10;1,41.8888,-87.6523"></textarea>
     <br>
-    <button onclick="run()">Process</button>
-
-    <div id="output"></div>
+    <button onclick="run()">Download CSV</button>
   </div>
 
-  <footer>Powered by <span style="color:var(--orange)">GeoJSON & Solidarity</span></footer>
+  <footer>Powered by <span style="color:var(--orange)">GeoJSON & Love</span></footer>
 
   <!-- libs -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
@@ -61,22 +56,16 @@
 
       if (!locals) { alert('GeoJSON not loaded yet (see console).'); return; }
 
-      if (fileInput) {
-        Papa.parse(fileInput, { header: true, skipEmptyLines: true, complete: process });
-      } else if (textInput) {
-        Papa.parse(textInput, { header: true, skipEmptyLines: true, delimiter: '\t', complete: process });
-      } else {
-        alert('Please upload a file or paste data.');
-      }
-
-      function process(results) {
-        const rows = results.data;
+      const parseCfg = { header: true, skipEmptyLines: true };
+      const onComplete = res => {
+        const rows = res.data;
         if (!rows.length) { alert('No rows'); return; }
 
         const latCol = Object.keys(rows[0]).find(k => k.toLowerCase().includes('lat'));
         const lngCol = Object.keys(rows[0]).find(k => k.toLowerCase().includes('lon'));
         if (!latCol || !lngCol) { alert('Cannot find Lat / Lng columns'); return; }
 
+        // attach territory
         const newRows = rows.map(r => {
           const lat = parseFloat(r[latCol]);
           const lng = parseFloat(r[lngCol]);
@@ -93,12 +82,24 @@
           return { ...r, Local: territory };
         });
 
-        // CSV ready for Excel
+        // create CSV blob & trigger download
         const csv = Papa.unparse(newRows);
-        const out = document.getElementById('output');
-        out.textContent = csv;
-        out.style.display = 'block';
-        out.classList.add('fade');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'output.csv';
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      };
+
+      if (fileInput) {
+        Papa.parse(fileInput, { ...parseCfg, complete: onComplete });
+      } else if (textInput) {
+        Papa.parse(textInput, { ...parseCfg, delimiter: '\t', complete: onComplete });
+      } else {
+        alert('Please upload a file or paste data.');
       }
     }
   </script>
